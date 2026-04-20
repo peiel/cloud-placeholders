@@ -1,0 +1,437 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 77;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		000000000000000000000011 /* EnterpriseCloudDriveFileProvider.appex in Embed App Extensions */ = {isa = PBXBuildFile; fileRef = 000000000000000000000007 /* EnterpriseCloudDriveFileProvider.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		000000000000000000000019 /* CloudPlaceholderDomain in Frameworks */ = {isa = PBXBuildFile; productRef = 000000000000000000000015 /* CloudPlaceholderDomain */; };
+		00000000000000000000001A /* CloudPlaceholderPersistence in Frameworks */ = {isa = PBXBuildFile; productRef = 000000000000000000000016 /* CloudPlaceholderPersistence */; };
+		00000000000000000000001B /* CloudPlaceholderSync in Frameworks */ = {isa = PBXBuildFile; productRef = 000000000000000000000017 /* CloudPlaceholderSync */; };
+		00000000000000000000001C /* CloudPlaceholderFileProviderKit in Frameworks */ = {isa = PBXBuildFile; productRef = 000000000000000000000018 /* CloudPlaceholderFileProviderKit */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		000000000000000000000012 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 000000000000000000000002 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 000000000000000000000010;
+			remoteInfo = EnterpriseCloudDriveFileProvider;
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		00000000000000000000000B /* Embed App Extensions */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 13;
+			files = (
+				000000000000000000000011 /* EnterpriseCloudDriveFileProvider.appex in Embed App Extensions */,
+			);
+			name = "Embed App Extensions";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
+
+/* Begin PBXFileReference section */
+		000000000000000000000006 /* EnterpriseCloudDrive.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = EnterpriseCloudDrive.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		000000000000000000000007 /* EnterpriseCloudDriveFileProvider.appex */ = {isa = PBXFileReference; explicitFileType = wrapper.app-extension; includeInIndex = 0; path = EnterpriseCloudDriveFileProvider.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+/* End PBXFileReference section */
+
+/* Begin PBXFileSystemSynchronizedRootGroup section */
+		000000000000000000000004 /* EnterpriseCloudDriveApp */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = EnterpriseCloudDriveApp;
+			sourceTree = "<group>";
+		};
+		000000000000000000000005 /* EnterpriseCloudDriveFileProvider */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = EnterpriseCloudDriveFileProvider;
+			sourceTree = "<group>";
+		};
+/* End PBXFileSystemSynchronizedRootGroup section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		000000000000000000000009 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		00000000000000000000000D /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				000000000000000000000019 /* CloudPlaceholderDomain in Frameworks */,
+				00000000000000000000001A /* CloudPlaceholderPersistence in Frameworks */,
+				00000000000000000000001B /* CloudPlaceholderSync in Frameworks */,
+				00000000000000000000001C /* CloudPlaceholderFileProviderKit in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		000000000000000000000001 = {
+			isa = PBXGroup;
+			children = (
+				000000000000000000000004 /* EnterpriseCloudDriveApp */,
+				000000000000000000000005 /* EnterpriseCloudDriveFileProvider */,
+				000000000000000000000003 /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		000000000000000000000003 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				000000000000000000000006 /* EnterpriseCloudDrive.app */,
+				000000000000000000000007 /* EnterpriseCloudDriveFileProvider.appex */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		00000000000000000000000F /* EnterpriseCloudDrive */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 000000000000000000000025 /* Build configuration list for PBXNativeTarget "EnterpriseCloudDrive" */;
+			buildPhases = (
+				000000000000000000000008 /* Sources */,
+				000000000000000000000009 /* Frameworks */,
+				00000000000000000000000A /* Resources */,
+				00000000000000000000000B /* Embed App Extensions */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				000000000000000000000013 /* PBXTargetDependency */,
+			);
+			fileSystemSynchronizedGroups = (
+				000000000000000000000004 /* EnterpriseCloudDriveApp */,
+			);
+			name = EnterpriseCloudDrive;
+			packageProductDependencies = (
+			);
+			productName = EnterpriseCloudDrive;
+			productReference = 000000000000000000000006 /* EnterpriseCloudDrive.app */;
+			productType = "com.apple.product-type.application";
+		};
+		000000000000000000000010 /* EnterpriseCloudDriveFileProvider */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 000000000000000000000028 /* Build configuration list for PBXNativeTarget "EnterpriseCloudDriveFileProvider" */;
+			buildPhases = (
+				00000000000000000000000C /* Sources */,
+				00000000000000000000000D /* Frameworks */,
+				00000000000000000000000E /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				000000000000000000000005 /* EnterpriseCloudDriveFileProvider */,
+			);
+			name = EnterpriseCloudDriveFileProvider;
+			packageProductDependencies = (
+				000000000000000000000015 /* CloudPlaceholderDomain */,
+				000000000000000000000016 /* CloudPlaceholderPersistence */,
+				000000000000000000000017 /* CloudPlaceholderSync */,
+				000000000000000000000018 /* CloudPlaceholderFileProviderKit */,
+			);
+			productName = EnterpriseCloudDriveFileProvider;
+			productReference = 000000000000000000000007 /* EnterpriseCloudDriveFileProvider.appex */;
+			productType = "com.apple.product-type.app-extension";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		000000000000000000000002 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = 1;
+				LastSwiftUpdateCheck = 1630;
+				LastUpgradeCheck = 1630;
+				TargetAttributes = {
+					00000000000000000000000F = {
+						CreatedOnToolsVersion = 16.3;
+					};
+					000000000000000000000010 = {
+						CreatedOnToolsVersion = 16.3;
+					};
+				};
+			};
+			buildConfigurationList = 000000000000000000000022 /* Build configuration list for PBXProject "EnterpriseCloudDrive" */;
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				en,
+				Base,
+			);
+			mainGroup = 000000000000000000000001;
+			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				000000000000000000000014 /* XCLocalSwiftPackageReference "../client" */,
+			);
+			preferredProjectObjectVersion = 77;
+			productRefGroup = 000000000000000000000003 /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				00000000000000000000000F /* EnterpriseCloudDrive */,
+				000000000000000000000010 /* EnterpriseCloudDriveFileProvider */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		00000000000000000000000A /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		00000000000000000000000E /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		000000000000000000000008 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		00000000000000000000000C /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		000000000000000000000013 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 000000000000000000000010 /* EnterpriseCloudDriveFileProvider */;
+			targetProxy = 000000000000000000000012 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
+
+/* Begin XCBuildConfiguration section */
+		000000000000000000000020 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ENABLE_MODULES = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				MACOSX_DEPLOYMENT_TARGET = 15.0;
+				ONLY_ACTIVE_ARCH = YES;
+				SDKROOT = macosx;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				SWIFT_VERSION = 6.0;
+			};
+			name = Debug;
+		};
+		000000000000000000000021 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ENABLE_MODULES = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				GCC_NO_COMMON_BLOCKS = YES;
+				MACOSX_DEPLOYMENT_TARGET = 15.0;
+				SDKROOT = macosx;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_OPTIMIZATION_LEVEL = "-O";
+				SWIFT_VERSION = 6.0;
+			};
+			name = Release;
+		};
+		000000000000000000000023 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = Config/EnterpriseCloudDriveApp/EnterpriseCloudDrive.entitlements;
+				CODE_SIGNING_ALLOWED = NO;
+				CODE_SIGN_STYLE = Manual;
+				COMBINE_HIDPI_IMAGES = YES;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = "";
+				ENABLE_HARDENED_RUNTIME = YES;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = Config/EnterpriseCloudDriveApp/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				MARKETING_VERSION = 0.1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.peiel.enterprisecloud.drive;
+				PRODUCT_NAME = EnterpriseCloudDrive;
+				SWIFT_VERSION = 6.0;
+			};
+			name = Debug;
+		};
+		000000000000000000000024 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = Config/EnterpriseCloudDriveApp/EnterpriseCloudDrive.entitlements;
+				CODE_SIGNING_ALLOWED = NO;
+				CODE_SIGN_STYLE = Manual;
+				COMBINE_HIDPI_IMAGES = YES;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = "";
+				ENABLE_HARDENED_RUNTIME = YES;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = Config/EnterpriseCloudDriveApp/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				MARKETING_VERSION = 0.1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.peiel.enterprisecloud.drive;
+				PRODUCT_NAME = EnterpriseCloudDrive;
+				SWIFT_VERSION = 6.0;
+			};
+			name = Release;
+		};
+		000000000000000000000026 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				APPLICATION_EXTENSION_API_ONLY = YES;
+				CODE_SIGN_ENTITLEMENTS = Config/EnterpriseCloudDriveFileProvider/EnterpriseCloudDriveFileProvider.entitlements;
+				CODE_SIGNING_ALLOWED = NO;
+				CODE_SIGN_STYLE = Manual;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = "";
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = Config/EnterpriseCloudDriveFileProvider/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+					"@executable_path/../../../../Frameworks",
+					"@loader_path/../Frameworks",
+				);
+				MARKETING_VERSION = 0.1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.peiel.enterprisecloud.drive.fileprovider;
+				PRODUCT_NAME = EnterpriseCloudDriveFileProvider;
+				SKIP_INSTALL = YES;
+				SWIFT_VERSION = 6.0;
+				WRAPPER_EXTENSION = appex;
+			};
+			name = Debug;
+		};
+		000000000000000000000027 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				APPLICATION_EXTENSION_API_ONLY = YES;
+				CODE_SIGN_ENTITLEMENTS = Config/EnterpriseCloudDriveFileProvider/EnterpriseCloudDriveFileProvider.entitlements;
+				CODE_SIGNING_ALLOWED = NO;
+				CODE_SIGN_STYLE = Manual;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = "";
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = Config/EnterpriseCloudDriveFileProvider/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+					"@executable_path/../../../../Frameworks",
+					"@loader_path/../Frameworks",
+				);
+				MARKETING_VERSION = 0.1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.peiel.enterprisecloud.drive.fileprovider;
+				PRODUCT_NAME = EnterpriseCloudDriveFileProvider;
+				SKIP_INSTALL = YES;
+				SWIFT_VERSION = 6.0;
+				WRAPPER_EXTENSION = appex;
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		000000000000000000000022 /* Build configuration list for PBXProject "EnterpriseCloudDrive" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				000000000000000000000020 /* Debug */,
+				000000000000000000000021 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		000000000000000000000025 /* Build configuration list for PBXNativeTarget "EnterpriseCloudDrive" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				000000000000000000000023 /* Debug */,
+				000000000000000000000024 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		000000000000000000000028 /* Build configuration list for PBXNativeTarget "EnterpriseCloudDriveFileProvider" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				000000000000000000000026 /* Debug */,
+				000000000000000000000027 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+/* End XCConfigurationList section */
+
+/* Begin XCLocalSwiftPackageReference section */
+		000000000000000000000014 /* XCLocalSwiftPackageReference "../client" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = ../client;
+		};
+/* End XCLocalSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		000000000000000000000015 /* CloudPlaceholderDomain */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 000000000000000000000014 /* XCLocalSwiftPackageReference "../client" */;
+			productName = CloudPlaceholderDomain;
+		};
+		000000000000000000000016 /* CloudPlaceholderPersistence */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 000000000000000000000014 /* XCLocalSwiftPackageReference "../client" */;
+			productName = CloudPlaceholderPersistence;
+		};
+		000000000000000000000017 /* CloudPlaceholderSync */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 000000000000000000000014 /* XCLocalSwiftPackageReference "../client" */;
+			productName = CloudPlaceholderSync;
+		};
+		000000000000000000000018 /* CloudPlaceholderFileProviderKit */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 000000000000000000000014 /* XCLocalSwiftPackageReference "../client" */;
+			productName = CloudPlaceholderFileProviderKit;
+		};
+/* End XCSwiftPackageProductDependency section */
+	};
+	rootObject = 000000000000000000000002 /* Project object */;
+}

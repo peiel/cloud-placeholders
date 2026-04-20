@@ -1,0 +1,16 @@
+client/.build
+client/.swiftpm
+client/.demo-state
+data/server-state.json
+data/blob-store/*
+data/uploads/*
+macos/.derived-data
+macos/.tmp
+macos/.xcode-home
+macos/.xcode-package-cache
+macos/.xcode-source-packages
+.DS_Store
+**/.DS_Store
+**/._*
+*.xcresult
+*.log

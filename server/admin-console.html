@@ -1,0 +1,137 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Enterprise Cloud Drive Admin</title>
+    <style>
+      :root {
+        --bg: #f4efe7;
+        --panel: #fffaf2;
+        --ink: #17302c;
+        --muted: #5e7068;
+        --accent: #0f766e;
+        --line: rgba(23, 48, 44, 0.12);
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        font-family: "SF Pro Display", "PingFang SC", sans-serif;
+        background:
+          radial-gradient(circle at top right, rgba(15,118,110,0.18), transparent 28%),
+          linear-gradient(180deg, #f7f2ea, #efe7db);
+        color: var(--ink);
+      }
+      header {
+        padding: 36px 28px 16px;
+      }
+      h1 {
+        margin: 0 0 10px;
+        font-size: 28px;
+      }
+      p {
+        margin: 0;
+        color: var(--muted);
+      }
+      main {
+        display: grid;
+        gap: 18px;
+        grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+        padding: 24px 28px 40px;
+      }
+      section {
+        background: rgba(255, 250, 242, 0.88);
+        border: 1px solid var(--line);
+        border-radius: 20px;
+        padding: 18px;
+        backdrop-filter: blur(10px);
+        box-shadow: 0 16px 40px rgba(46, 64, 58, 0.08);
+      }
+      h2 {
+        margin: 0 0 14px;
+        font-size: 17px;
+      }
+      ul {
+        list-style: none;
+        padding: 0;
+        margin: 0;
+      }
+      li {
+        border-top: 1px solid var(--line);
+        padding: 10px 0;
+      }
+      li:first-child { border-top: 0; padding-top: 0; }
+      code {
+        background: rgba(15,118,110,0.08);
+        padding: 2px 6px;
+        border-radius: 999px;
+      }
+      .muted { color: var(--muted); }
+    </style>
+  </head>
+  <body>
+    <header>
+      <h1>Enterprise Cloud Drive Admin</h1>
+      <p>v1 mock 控制台，用于查看设备注册、文件元数据和审计日志。</p>
+    </header>
+    <main>
+      <section>
+        <h2>已注册设备</h2>
+        <ul id="devices"><li class="muted">加载中…</li></ul>
+      </section>
+      <section>
+        <h2>文件目录</h2>
+        <ul id="items"><li class="muted">加载中…</li></ul>
+      </section>
+      <section>
+        <h2>审计日志</h2>
+        <ul id="audit"><li class="muted">加载中…</li></ul>
+      </section>
+    </main>
+    <script>
+      async function loadJSON(path) {
+        const response = await fetch(path);
+        if (!response.ok) throw new Error(await response.text());
+        return response.json();
+      }
+
+      function renderList(id, items, render) {
+        const host = document.getElementById(id);
+        host.innerHTML = "";
+        if (!items.length) {
+          host.innerHTML = '<li class="muted">暂无数据</li>';
+          return;
+        }
+        for (const item of items) {
+          const li = document.createElement("li");
+          li.innerHTML = render(item);
+          host.appendChild(li);
+        }
+      }
+
+      Promise.all([
+        loadJSON("/api/admin/devices"),
+        loadJSON("/api/admin/items"),
+        loadJSON("/api/admin/audit")
+      ]).then(([devices, items, audit]) => {
+        renderList("devices", devices, device => `
+          <strong>${device.hostName}</strong><br />
+          <span class="muted">tenant: <code>${device.tenantID}</code> · user: <code>${device.userID}</code></span>
+        `);
+        renderList("items", items, item => `
+          <strong>${item.name}</strong><br />
+          <span class="muted">${item.kind} · version ${item.contentVersion ?? "-"}</span>
+        `);
+        renderList("audit", audit.reverse(), event => `
+          <strong>${event.action}</strong><br />
+          <span class="muted">${event.actorID} @ ${new Date(event.happenedAt).toLocaleString()}</span>
+        `);
+      }).catch(error => {
+        renderList("devices", [], () => "");
+        renderList("items", [], () => "");
+        renderList("audit", [], () => "");
+        console.error(error);
+      });
+    </script>
+  </body>
+</html>
