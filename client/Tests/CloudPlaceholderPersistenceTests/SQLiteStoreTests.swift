@@ -62,3 +62,29 @@ func sqliteStoreTracksPendingOperationsAndSyncState() throws {
     let cursor = try #require(try store.syncState(domainID: "primary"))
     #expect(cursor.remoteCursor == "42")
 }
+
+@Test
+func sqliteStorePersistsProviderChanges() throws {
+    let testDirectory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
+    try FileManager.default.createDirectory(at: testDirectory, withIntermediateDirectories: true)
+    let databaseURL = testDirectory.appendingPathComponent("state.sqlite")
+    let store = try SQLiteMetadataStore(databaseURL: databaseURL)
+
+    let sequence = try store.appendProviderChanges(
+        domainID: "primary",
+        changes: [
+            ProviderChange(
+                domainID: "primary",
+                itemID: "spec.docx",
+                parentItemID: "root",
+                changeType: .update,
+                deleted: false
+            )
+        ]
+    )
+    #expect(sequence > 0)
+
+    let changes = try store.providerChanges(domainID: "primary", after: 0, containerID: nil)
+    #expect(changes.count == 1)
+    #expect(changes.first?.itemID == "spec.docx")
+}

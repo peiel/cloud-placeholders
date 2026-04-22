@@ -5,34 +5,46 @@ import CloudPlaceholderSync
 import FileProvider
 import Foundation
 
-private enum CloudDriveSharedConfiguration {
-    static let appGroupID = "group.com.peiel.enterprisecloud.drive"
-    static let mockServerURLKey = "MockServerURL"
-    static let defaultMockServerURL = "http://127.0.0.1:8787"
-
-    static var sharedDefaults: UserDefaults {
-        UserDefaults(suiteName: appGroupID) ?? .standard
-    }
-}
-
 @objc(FileProviderExtension)
 final class FileProviderExtension: NSObject, NSFileProviderReplicatedExtension, @unchecked Sendable {
     private let domain: NSFileProviderDomain
     private let store: SQLiteMetadataStore
     private let syncEngine: SyncEngine
     private let controller: ProviderDomainController
+    private let bootstrapCoordinator: SyncBootstrapCoordinator
     private let stagingDirectory: URL
     private let cacheDirectory: URL
 
     required init(domain: NSFileProviderDomain) {
         self.domain = domain
-        let runtime = ExtensionRuntime.bootstrap(domainIdentifier: domain.identifier.rawValue)
+        let runtime: CloudDriveRuntimeContext
+        do {
+            runtime = try CloudDriveRuntime.bootstrap(domainIdentifier: domain.identifier.rawValue)
+        } catch {
+            fatalError("Unable to bootstrap File Provider runtime: \(error)")
+        }
         self.store = runtime.store
         self.syncEngine = runtime.syncEngine
-        self.controller = runtime.controller
         self.stagingDirectory = runtime.stagingDirectory
         self.cacheDirectory = runtime.cacheDirectory
+        self.bootstrapCoordinator = SyncBootstrapCoordinator(
+            domainID: domain.identifier.rawValue,
+            store: runtime.store,
+            syncEngine: runtime.syncEngine
+        )
+        self.controller = ProviderDomainController(
+            store: runtime.store,
+            syncEngine: runtime.syncEngine,
+            rootDisplayName: runtime.configuration.domainDisplayName,
+            domainID: domain.identifier.rawValue,
+            prepareEnumeration: { [bootstrapCoordinator] in
+                try await bootstrapCoordinator.ensureInitialSync()
+            }
+        )
         super.init()
+        Task {
+            try? await bootstrapCoordinator.ensureInitialSync()
+        }
     }
 
     func invalidate() {}
@@ -47,11 +59,17 @@ final class FileProviderExtension: NSObject, NSFileProviderReplicatedExtension, 
         completionHandler: @escaping ((any NSFileProviderItem)?, Error?) -> Void
     ) -> Progress {
         let progress = Progress(totalUnitCount: 1)
-        do {
-            completionHandler(try controller.item(for: identifier), nil)
-            progress.completedUnitCount = 1
-        } catch {
-            completionHandler(nil, error)
+        let controller = self.controller
+        let coordinator = self.bootstrapCoordinator
+        let completion = UnsafeSendableBox(completionHandler)
+        Task {
+            do {
+                try await coordinator.ensureInitialSync()
+                completion.value(try controller.item(for: identifier), nil)
+                progress.completedUnitCount = 1
+            } catch {
+                completion.value(nil, error)
+            }
         }
         return progress
     }
@@ -65,9 +83,11 @@ final class FileProviderExtension: NSObject, NSFileProviderReplicatedExtension, 
         let progress = Progress(totalUnitCount: 1)
         let controller = self.controller
         let cacheDirectory = self.cacheDirectory
+        let coordinator = self.bootstrapCoordinator
         let completion = UnsafeSendableBox(completionHandler)
         Task {
             do {
+                try await coordinator.ensureInitialSync()
                 let (url, item) = try await controller.fetchContents(for: itemIdentifier, into: cacheDirectory)
                 completion.value(url, item, nil)
                 progress.completedUnitCount = 1
@@ -91,6 +111,7 @@ final class FileProviderExtension: NSObject, NSFileProviderReplicatedExtension, 
         let syncEngine = self.syncEngine
         let controller = self.controller
         let stagingDirectory = self.stagingDirectory
+        let domainIdentifier = self.domain.identifier.rawValue
         let completion = UnsafeSendableBox(completionHandler)
         let snapshot = TemplateSnapshot(item: itemTemplate)
         Task {
@@ -101,7 +122,9 @@ final class FileProviderExtension: NSObject, NSFileProviderReplicatedExtension, 
                     store: store,
                     syncEngine: syncEngine,
                     controller: controller,
-                    stagingDirectory: stagingDirectory
+                    stagingDirectory: stagingDirectory,
+                    domainIdentifier: domainIdentifier,
+                    previousParentID: snapshot.parentID
                 )
                 completion.value(item, [], false, nil)
                 progress.completedUnitCount = 1
@@ -126,6 +149,7 @@ final class FileProviderExtension: NSObject, NSFileProviderReplicatedExtension, 
         let syncEngine = self.syncEngine
         let controller = self.controller
         let stagingDirectory = self.stagingDirectory
+        let domainIdentifier = self.domain.identifier.rawValue
         let completion = UnsafeSendableBox(completionHandler)
         let snapshot = TemplateSnapshot(item: item)
         Task {
@@ -136,7 +160,9 @@ final class FileProviderExtension: NSObject, NSFileProviderReplicatedExtension, 
                     store: store,
                     syncEngine: syncEngine,
                     controller: controller,
-                    stagingDirectory: stagingDirectory
+                    stagingDirectory: stagingDirectory,
+                    domainIdentifier: domainIdentifier,
+                    previousParentID: snapshot.parentID
                 )
                 completion.value(item, [], false, nil)
                 progress.completedUnitCount = 1
@@ -155,12 +181,24 @@ final class FileProviderExtension: NSObject, NSFileProviderReplicatedExtension, 
         completionHandler: @escaping (Error?) -> Void
     ) -> Progress {
         let progress = Progress(totalUnitCount: 1)
-        do {
-            try store.tombstone(itemID: Self.mapProviderIdentifier(identifier), updatedAt: Date())
-            completionHandler(nil)
-            progress.completedUnitCount = 1
-        } catch {
-            completionHandler(error)
+        let syncEngine = self.syncEngine
+        let completion = UnsafeSendableBox(completionHandler)
+        let itemID = Self.mapProviderIdentifier(identifier)
+        let previousParentID = (try? store.item(id: itemID))?.parentID ?? CloudDriveRuntime.rootItemID
+        let domainIdentifier = self.domain.identifier.rawValue
+        Task {
+            do {
+                _ = try syncEngine.stageDeletion(itemID: itemID)
+                try await syncEngine.flushPendingOperations()
+                await FileProviderDomainSignaler.signal(
+                    domainIdentifier: domainIdentifier,
+                    itemIdentifiers: Set([itemID, previousParentID, CloudDriveRuntime.rootItemID])
+                )
+                completion.value(nil)
+                progress.completedUnitCount = 1
+            } catch {
+                completion.value(error)
+            }
         }
         return progress
     }
@@ -171,30 +209,25 @@ final class FileProviderExtension: NSObject, NSFileProviderReplicatedExtension, 
         store: SQLiteMetadataStore,
         syncEngine: SyncEngine,
         controller: ProviderDomainController,
-        stagingDirectory: URL
+        stagingDirectory: URL,
+        domainIdentifier: String,
+        previousParentID: String
     ) async throws -> any NSFileProviderItem {
         let itemID = template.itemID
         let parentID = template.parentID
         if let url {
             let clonedURL = try cloneSystemOwnedFile(url, itemID: itemID, filename: template.filename, stagingDirectory: stagingDirectory)
             _ = try syncEngine.stageLocalFile(itemID: itemID, parentID: parentID, fileURL: clonedURL)
-            try await syncEngine.flushPendingUploads()
+        } else if try store.item(id: itemID) == nil {
+            _ = try syncEngine.stageDirectoryCreation(itemID: itemID, parentID: parentID, name: template.filename)
         } else {
-            let now = Date()
-            try store.upsert(
-                item: SyncItem(
-                    id: itemID,
-                    parentID: parentID,
-                    name: template.filename,
-                    kind: .directory,
-                    state: .dirty,
-                    hydrated: true,
-                    dirty: true,
-                    createdAt: now,
-                    updatedAt: now
-                )
-            )
+            _ = try syncEngine.stageMetadataChange(itemID: itemID, parentID: parentID, name: template.filename)
         }
+        try await syncEngine.flushPendingOperations()
+        await FileProviderDomainSignaler.signal(
+            domainIdentifier: domainIdentifier,
+            itemIdentifiers: Set([itemID, parentID, previousParentID, CloudDriveRuntime.rootItemID])
+        )
         return try controller.item(for: template.providerIdentifier)
     }
 
@@ -215,67 +248,6 @@ final class FileProviderExtension: NSObject, NSFileProviderReplicatedExtension, 
         default:
             return identifier.rawValue
         }
-    }
-}
-
-private enum ExtensionRuntime {
-    static func bootstrap(domainIdentifier: String) -> (
-        store: SQLiteMetadataStore,
-        syncEngine: SyncEngine,
-        controller: ProviderDomainController,
-        stagingDirectory: URL,
-        cacheDirectory: URL
-    ) {
-        do {
-            let root = try runtimeRoot(domainIdentifier: domainIdentifier)
-            let databaseURL = root.appendingPathComponent("state.sqlite")
-            let cacheDirectory = root.appendingPathComponent("cache", isDirectory: true)
-            let stagingDirectory = root.appendingPathComponent("staging", isDirectory: true)
-            let store = try SQLiteMetadataStore(databaseURL: databaseURL)
-            try seedRootIfNeeded(store: store)
-            let remoteURL = URL(
-                string: CloudDriveSharedConfiguration.sharedDefaults.string(
-                    forKey: CloudDriveSharedConfiguration.mockServerURLKey
-                ) ?? CloudDriveSharedConfiguration.defaultMockServerURL
-            )!
-            let syncEngine = SyncEngine(
-                domainID: domainIdentifier,
-                store: store,
-                remote: HTTPRemoteAPIClient(baseURL: remoteURL)
-            )
-            let controller = ProviderDomainController(store: store, syncEngine: syncEngine)
-            return (store, syncEngine, controller, stagingDirectory, cacheDirectory)
-        } catch {
-            fatalError("Unable to bootstrap File Provider runtime: \(error)")
-        }
-    }
-
-    private static func runtimeRoot(domainIdentifier: String) throws -> URL {
-        let fileManager = FileManager.default
-        let base = (
-            fileManager.containerURL(forSecurityApplicationGroupIdentifier: CloudDriveSharedConfiguration.appGroupID)
-            ?? fileManager.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
-        )
-            .appendingPathComponent("EnterpriseCloudDriveShared", isDirectory: true)
-            .appendingPathComponent(domainIdentifier, isDirectory: true)
-        try fileManager.createDirectory(at: base, withIntermediateDirectories: true)
-        return base
-    }
-
-    private static func seedRootIfNeeded(store: SQLiteMetadataStore) throws {
-        guard try store.item(id: ProviderDomainController.rootItemID) == nil else {
-            return
-        }
-        try store.upsert(
-            item: SyncItem(
-                id: ProviderDomainController.rootItemID,
-                parentID: nil,
-                name: "Enterprise Cloud Drive",
-                kind: .directory,
-                state: .hydrated,
-                hydrated: true
-            )
-        )
     }
 }
 

@@ -264,6 +264,7 @@ public struct RemoteChangeBatch: Codable, Equatable, Sendable {
 public struct UploadDescriptor: Codable, Equatable, Sendable {
     public var operationID: String
     public var itemID: String
+    public var parentID: String?
     public var fileName: String
     public var fileSize: Int64
     public var sha256: String
@@ -273,6 +274,7 @@ public struct UploadDescriptor: Codable, Equatable, Sendable {
     public init(
         operationID: String,
         itemID: String,
+        parentID: String? = nil,
         fileName: String,
         fileSize: Int64,
         sha256: String,
@@ -281,6 +283,7 @@ public struct UploadDescriptor: Codable, Equatable, Sendable {
     ) {
         self.operationID = operationID
         self.itemID = itemID
+        self.parentID = parentID
         self.fileName = fileName
         self.fileSize = fileSize
         self.sha256 = sha256
@@ -356,6 +359,8 @@ public enum CloudPlaceholderError: Error, Equatable, LocalizedError, Sendable {
     case versionConflict(String)
     case ignoredSystemFile(String)
     case network(String)
+    case localSourceUnavailable(String)
+    case bookmarkResolutionFailed(String)
 
     public var errorDescription: String? {
         switch self {
@@ -371,6 +376,10 @@ public enum CloudPlaceholderError: Error, Equatable, LocalizedError, Sendable {
             return "Ignored system file: \(path)"
         case .network(let message):
             return "Network error: \(message)"
+        case .localSourceUnavailable(let message):
+            return "Local source unavailable: \(message)"
+        case .bookmarkResolutionFailed(let message):
+            return "Bookmark resolution failed: \(message)"
         }
     }
 }
@@ -395,13 +404,20 @@ public protocol MetadataStore: Sendable {
     func updateOperationState(id: String, state: OperationLifecycleState, retryCount: Int, updatedAt: Date) throws
     func save(transfer: TransferRecord) throws
     func transfer(id: String) throws -> TransferRecord?
+    func appendProviderChanges(domainID: String, changes: [ProviderChange]) throws -> Int64
+    func providerChanges(domainID: String, after sequence: Int64, containerID: String?) throws -> [ProviderChange]
+    func latestProviderChangeSequence(domainID: String) throws -> Int64
 }
 
 public protocol RemoteAPIClient: Sendable {
+    var requiresPostMutationSync: Bool { get }
     func register(device: DeviceRegistration) async throws -> DevicePolicy
     func fetchChanges(cursor: String?) async throws -> RemoteChangeBatch
     func downloadContent(itemID: String, to destinationURL: URL) async throws -> SyncItem
     func uploadContent(descriptor: UploadDescriptor, fileURL: URL) async throws -> RemoteCommitResult
+    func createDirectory(itemID: String, parentID: String?, name: String, baseMetadataVersion: String?) async throws -> RemoteCommitResult
+    func updateMetadata(itemID: String, name: String, parentID: String?, baseMetadataVersion: String?) async throws -> RemoteCommitResult
+    func deleteItem(itemID: String, baseMetadataVersion: String?) async throws -> String
 }
 
 public enum IgnoredSystemFileMatcher {

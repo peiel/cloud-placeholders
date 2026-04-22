@@ -116,36 +116,69 @@ public final class PlaceholderFileProviderItem: NSObject, NSFileProviderItem {
 public final class PlaceholderEnumerator: NSObject, NSFileProviderEnumerator {
     private let containerID: NSFileProviderItemIdentifier
     private let controller: ProviderDomainController
+    private let prepare: @Sendable () async throws -> Void
 
-    public init(containerID: NSFileProviderItemIdentifier, controller: ProviderDomainController) {
+    public init(
+        containerID: NSFileProviderItemIdentifier,
+        controller: ProviderDomainController,
+        prepare: @escaping @Sendable () async throws -> Void
+    ) {
         self.containerID = containerID
         self.controller = controller
+        self.prepare = prepare
     }
 
     public func invalidate() {}
 
     public func enumerateItems(for observer: any NSFileProviderEnumerationObserver, startingAt page: NSFileProviderPage) {
-        do {
-            let models = try controller.items(in: containerID)
-            observer.didEnumerate(models.map { PlaceholderFileProviderItem(model: $0, rootDisplayName: controller.rootDisplayName) })
-            observer.finishEnumerating(upTo: nil)
-        } catch {
-            observer.finishEnumeratingWithError(error as NSError)
+        let prepare = self.prepare
+        let controller = self.controller
+        let containerID = self.containerID
+        let observerBox = UnsafeSendableBox(observer)
+        Task<Void, Never> {
+            do {
+                try await prepare()
+                let models = try controller.items(in: containerID)
+                observerBox.value.didEnumerate(models.map { PlaceholderFileProviderItem(model: $0, rootDisplayName: controller.rootDisplayName) })
+                observerBox.value.finishEnumerating(upTo: nil)
+            } catch {
+                observerBox.value.finishEnumeratingWithError(error as NSError)
+            }
         }
     }
 
     public func enumerateChanges(for observer: any NSFileProviderChangeObserver, from syncAnchor: NSFileProviderSyncAnchor) {
-        do {
-            let models = try controller.items(in: containerID)
-            observer.didUpdate(models.map { PlaceholderFileProviderItem(model: $0, rootDisplayName: controller.rootDisplayName) })
-            observer.finishEnumeratingChanges(upTo: controller.currentSyncAnchorData(), moreComing: false)
-        } catch {
-            observer.finishEnumeratingWithError(error as NSError)
+        let prepare = self.prepare
+        let controller = self.controller
+        let containerID = self.containerID
+        let observerBox = UnsafeSendableBox(observer)
+        Task<Void, Never> {
+            do {
+                try await prepare()
+                let changeSet = try controller.changeSet(in: containerID, from: syncAnchor)
+                if !changeSet.updated.isEmpty {
+                    observerBox.value.didUpdate(changeSet.updated.map { PlaceholderFileProviderItem(model: $0, rootDisplayName: controller.rootDisplayName) })
+                }
+                if !changeSet.deleted.isEmpty {
+                    observerBox.value.didDeleteItems(withIdentifiers: changeSet.deleted.map { NSFileProviderItemIdentifier($0) })
+                }
+                observerBox.value.finishEnumeratingChanges(upTo: controller.currentSyncAnchorData(), moreComing: false)
+            } catch {
+                observerBox.value.finishEnumeratingWithError(error as NSError)
+            }
         }
     }
 
     public func currentSyncAnchor(completionHandler: @escaping (NSFileProviderSyncAnchor?) -> Void) {
         completionHandler(controller.currentSyncAnchorData())
+    }
+}
+
+private final class UnsafeSendableBox<Value>: @unchecked Sendable {
+    let value: Value
+
+    init(_ value: Value) {
+        self.value = value
     }
 }
 
@@ -155,12 +188,22 @@ public final class ProviderDomainController: @unchecked Sendable {
 
     private let store: MetadataStore
     private let syncEngine: SyncEngine
+    private let prepareEnumeration: @Sendable () async throws -> Void
+    private let domainID: String
     public let rootDisplayName: String
 
-    public init(store: MetadataStore, syncEngine: SyncEngine, rootDisplayName: String = "Enterprise Cloud Drive") {
+    public init(
+        store: MetadataStore,
+        syncEngine: SyncEngine,
+        rootDisplayName: String = "Enterprise Cloud Drive",
+        domainID: String = "primary",
+        prepareEnumeration: @escaping @Sendable () async throws -> Void = {}
+    ) {
         self.store = store
         self.syncEngine = syncEngine
         self.rootDisplayName = rootDisplayName
+        self.domainID = domainID
+        self.prepareEnumeration = prepareEnumeration
     }
 
     public func item(for identifier: NSFileProviderItemIdentifier) throws -> PlaceholderFileProviderItem {
@@ -183,7 +226,7 @@ public final class ProviderDomainController: @unchecked Sendable {
     }
 
     public func enumerator(for identifier: NSFileProviderItemIdentifier) -> PlaceholderEnumerator {
-        PlaceholderEnumerator(containerID: identifier, controller: self)
+        PlaceholderEnumerator(containerID: identifier, controller: self, prepare: prepareEnumeration)
     }
 
     public func fetchContents(for identifier: NSFileProviderItemIdentifier, into cacheDirectory: URL) async throws -> (URL, PlaceholderFileProviderItem) {
@@ -202,8 +245,35 @@ public final class ProviderDomainController: @unchecked Sendable {
     }
 
     fileprivate func currentSyncAnchorData() -> NSFileProviderSyncAnchor {
-        let cursor = (try? store.syncState(domainID: "primary"))?.remoteCursor ?? "0"
+        let cursor = (try? store.syncState(domainID: domainID))?.workingSetCursor
+            ?? String((try? store.latestProviderChangeSequence(domainID: domainID)) ?? 0)
         return NSFileProviderSyncAnchor(Data(cursor.utf8))
+    }
+
+    fileprivate func changeSet(in identifier: NSFileProviderItemIdentifier, from syncAnchor: NSFileProviderSyncAnchor) throws -> (updated: [SyncItem], deleted: [String]) {
+        let cursor = String(decoding: syncAnchor.rawValue, as: UTF8.self)
+        let sequence = Int64(cursor) ?? 0
+        let containerID: String? = {
+            switch identifier {
+            case .workingSet:
+                return nil
+            case .rootContainer:
+                return Self.rootItemID
+            default:
+                return identifier.rawValue
+            }
+        }()
+        let changes = try store.providerChanges(domainID: domainID, after: sequence, containerID: containerID)
+        var updated: [SyncItem] = []
+        var deleted: [String] = []
+        for change in changes {
+            if change.deleted {
+                deleted.append(change.itemID)
+            } else if let item = try store.item(id: change.itemID) {
+                updated.append(item)
+            }
+        }
+        return (updated, deleted)
     }
 
     private func mapProviderIdentifier(_ identifier: NSFileProviderItemIdentifier) -> String {

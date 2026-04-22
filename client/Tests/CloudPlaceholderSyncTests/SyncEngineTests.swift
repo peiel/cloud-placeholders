@@ -58,6 +58,8 @@ private actor RemoteStub {
 private struct RemoteAPIStub: RemoteAPIClient {
     let storage: RemoteStub
 
+    var requiresPostMutationSync: Bool { false }
+
     func register(device: DeviceRegistration) async throws -> DevicePolicy {
         await storage.register(device: device)
     }
@@ -77,6 +79,40 @@ private struct RemoteAPIStub: RemoteAPIClient {
 
     func uploadContent(descriptor: UploadDescriptor, fileURL: URL) async throws -> RemoteCommitResult {
         try await storage.upload(descriptor: descriptor)
+    }
+
+    func createDirectory(itemID: String, parentID: String?, name: String, baseMetadataVersion: String?) async throws -> RemoteCommitResult {
+        let item = SyncItem(
+            id: itemID,
+            parentID: parentID,
+            name: name,
+            kind: .directory,
+            contentVersion: nil,
+            metadataVersion: "m-dir",
+            state: .hydrated,
+            hydrated: true,
+            dirty: false,
+            createdAt: Date(),
+            updatedAt: Date()
+        )
+        await storage.set(item: item)
+        return RemoteCommitResult(item: item, remoteCursor: "mkdir")
+    }
+
+    func updateMetadata(itemID: String, name: String, parentID: String?, baseMetadataVersion: String?) async throws -> RemoteCommitResult {
+        guard var item = await storage.item(id: itemID) else {
+            throw CloudPlaceholderError.missingItem(itemID)
+        }
+        item.name = name
+        item.parentID = parentID
+        item.metadataVersion = "m-update"
+        item.updatedAt = Date()
+        await storage.set(item: item)
+        return RemoteCommitResult(item: item, remoteCursor: "meta")
+    }
+
+    func deleteItem(itemID: String, baseMetadataVersion: String?) async throws -> String {
+        "delete"
     }
 }
 
@@ -111,7 +147,7 @@ func syncEngineAppliesRemoteChangesAndUploadsLocalEdits() async throws {
     let localFile = testDirectory.appendingPathComponent("plan.md")
     try "locally edited".write(to: localFile, atomically: true, encoding: .utf8)
     _ = try engine.stageLocalFile(itemID: "plan.md", parentID: "root", fileURL: localFile)
-    try await engine.flushPendingUploads()
+    try await engine.flushPendingOperations()
 
     let uploaded = try #require(try store.item(id: "plan.md"))
     #expect(uploaded.dirty == false)
@@ -150,4 +186,44 @@ func syncEngineEvictsOnlyUnpinnedHydratedFiles() throws {
     let evicted = try engine.evictColdFiles(maximumCachedBytes: 0)
     #expect(evicted == ["cold"])
     #expect(FileManager.default.fileExists(atPath: localFile.path) == false)
+}
+
+@Test
+func syncEngineDeleteDirectoryTombstonesDescendantsAndLogsProviderChanges() async throws {
+    let testDirectory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
+    try FileManager.default.createDirectory(at: testDirectory, withIntermediateDirectories: true)
+    let store = try SQLiteMetadataStore(databaseURL: testDirectory.appendingPathComponent("state.sqlite"))
+
+    try store.upsert(
+        item: SyncItem(
+            id: "folder",
+            parentID: "root",
+            name: "folder",
+            kind: .directory,
+            state: .hydrated,
+            hydrated: true
+        )
+    )
+    try store.upsert(
+        item: SyncItem(
+            id: "nested.txt",
+            parentID: "folder",
+            name: "nested.txt",
+            kind: .file,
+            state: .cloudOnly
+        )
+    )
+
+    let engine = SyncEngine(domainID: "primary", store: store, remote: RemoteAPIStub(storage: RemoteStub()))
+    _ = try engine.stageDeletion(itemID: "folder")
+    try await engine.flushPendingOperations()
+
+    let folder = try #require(try store.item(id: "folder"))
+    let nested = try #require(try store.item(id: "nested.txt"))
+    #expect(folder.deleted == true)
+    #expect(nested.deleted == true)
+
+    let changes = try store.providerChanges(domainID: "primary", after: 0, containerID: nil)
+    let deletedIDs = changes.filter(\.deleted).map(\.itemID)
+    #expect(Set(deletedIDs) == Set(["folder", "nested.txt"]))
 }

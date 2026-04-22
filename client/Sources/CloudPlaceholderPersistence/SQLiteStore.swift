@@ -412,6 +412,193 @@ public final class SQLiteMetadataStore: MetadataStore, @unchecked Sendable {
         }
     }
 
+    public func appendProviderChanges(domainID: String, changes: [ProviderChange]) throws -> Int64 {
+        try queue.sync {
+            guard !changes.isEmpty else {
+                return try latestProviderChangeSequenceLocked(domainID: domainID)
+            }
+            var lastSequence = try latestProviderChangeSequenceLocked(domainID: domainID)
+            try connection.execute("BEGIN IMMEDIATE")
+            do {
+                for change in changes {
+                    try connection.withStatement(
+                        """
+                        INSERT INTO provider_changes (
+                          domain_id, item_id, parent_item_id, previous_parent_item_id, change_type, deleted, changed_at
+                        ) VALUES (?, ?, ?, ?, ?, ?, ?)
+                        """
+                    ) { statement in
+                        try statement.bind(1, text: domainID)
+                        try statement.bind(2, text: change.itemID)
+                        try statement.bind(3, text: change.parentItemID)
+                        try statement.bind(4, text: change.previousParentItemID)
+                        try statement.bind(5, text: change.changeType.rawValue)
+                        try statement.bind(6, int: change.deleted ? 1 : 0)
+                        try statement.bind(7, int64: change.changedAt.epochSeconds)
+                        _ = try statement.step()
+                    }
+                    lastSequence = connection.lastInsertRowID
+                }
+                try connection.execute("COMMIT")
+            } catch {
+                try? connection.execute("ROLLBACK")
+                throw error
+            }
+            return lastSequence
+        }
+    }
+
+    public func providerChanges(domainID: String, after sequence: Int64, containerID: String?) throws -> [ProviderChange] {
+        try queue.sync {
+            let sql: String
+            if containerID == nil {
+                sql = """
+                SELECT sequence, domain_id, item_id, parent_item_id, previous_parent_item_id, change_type, deleted, changed_at
+                FROM provider_changes
+                WHERE domain_id = ? AND sequence > ?
+                ORDER BY sequence ASC
+                """
+            } else {
+                sql = """
+                SELECT sequence, domain_id, item_id, parent_item_id, previous_parent_item_id, change_type, deleted, changed_at
+                FROM provider_changes
+                WHERE domain_id = ? AND sequence > ?
+                  AND (
+                    item_id = ?
+                    OR parent_item_id = ?
+                    OR previous_parent_item_id = ?
+                  )
+                ORDER BY sequence ASC
+                """
+            }
+            return try connection.withStatement(sql) { statement in
+                try statement.bind(1, text: domainID)
+                try statement.bind(2, int64: sequence)
+                if let containerID {
+                    try statement.bind(3, text: containerID)
+                    try statement.bind(4, text: containerID)
+                    try statement.bind(5, text: containerID)
+                }
+                var changes: [ProviderChange] = []
+                while try statement.step() {
+                    changes.append(try decodeProviderChange(statement))
+                }
+                return changes
+            }
+        }
+    }
+
+    public func latestProviderChangeSequence(domainID: String) throws -> Int64 {
+        try queue.sync {
+            try latestProviderChangeSequenceLocked(domainID: domainID)
+        }
+    }
+
+    public func sourceEntries(domainID: String) throws -> [SourceEntry] {
+        try queue.sync {
+            try connection.withStatement(
+                """
+                SELECT domain_id, source_id, item_id, parent_source_id, parent_item_id, relative_path, name, is_dir,
+                       size, content_version, metadata_version, remote_mtime, updated_at
+                FROM source_entries
+                WHERE domain_id = ?
+                ORDER BY relative_path ASC
+                """
+            ) { statement in
+                try statement.bind(1, text: domainID)
+                var entries: [SourceEntry] = []
+                while try statement.step() {
+                    entries.append(decodeSourceEntry(statement))
+                }
+                return entries
+            }
+        }
+    }
+
+    public func sourceEntry(domainID: String, itemID: String) throws -> SourceEntry? {
+        try queue.sync {
+            try connection.withStatement(
+                """
+                SELECT domain_id, source_id, item_id, parent_source_id, parent_item_id, relative_path, name, is_dir,
+                       size, content_version, metadata_version, remote_mtime, updated_at
+                FROM source_entries
+                WHERE domain_id = ? AND item_id = ?
+                LIMIT 1
+                """
+            ) { statement in
+                try statement.bind(1, text: domainID)
+                try statement.bind(2, text: itemID)
+                return try statement.step() ? decodeSourceEntry(statement) : nil
+            }
+        }
+    }
+
+    public func sourceEntry(domainID: String, relativePath: String) throws -> SourceEntry? {
+        try queue.sync {
+            try connection.withStatement(
+                """
+                SELECT domain_id, source_id, item_id, parent_source_id, parent_item_id, relative_path, name, is_dir,
+                       size, content_version, metadata_version, remote_mtime, updated_at
+                FROM source_entries
+                WHERE domain_id = ? AND relative_path = ?
+                LIMIT 1
+                """
+            ) { statement in
+                try statement.bind(1, text: domainID)
+                try statement.bind(2, text: relativePath)
+                return try statement.step() ? decodeSourceEntry(statement) : nil
+            }
+        }
+    }
+
+    public func replaceSourceEntries(domainID: String, entries: [SourceEntry], removingItemIDs: [String]) throws {
+        try queue.sync {
+            try connection.execute("BEGIN IMMEDIATE")
+            do {
+                if !removingItemIDs.isEmpty {
+                    let placeholders = removingItemIDs.enumerated().map { index, _ in index == 0 ? "?" : ", ?" }.joined()
+                    let sql = "DELETE FROM source_entries WHERE domain_id = ? AND item_id IN (\(placeholders))"
+                    try connection.withStatement(sql) { statement in
+                        try statement.bind(1, text: domainID)
+                        for (index, itemID) in removingItemIDs.enumerated() {
+                            try statement.bind(Int32(index + 2), text: itemID)
+                        }
+                        _ = try statement.step()
+                    }
+                }
+                for entry in entries {
+                    try connection.withStatement(
+                        """
+                        INSERT INTO source_entries (
+                          domain_id, source_id, item_id, parent_source_id, parent_item_id, relative_path, name, is_dir,
+                          size, content_version, metadata_version, remote_mtime, updated_at
+                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        ON CONFLICT(domain_id, source_id) DO UPDATE SET
+                          item_id = excluded.item_id,
+                          parent_source_id = excluded.parent_source_id,
+                          parent_item_id = excluded.parent_item_id,
+                          relative_path = excluded.relative_path,
+                          name = excluded.name,
+                          is_dir = excluded.is_dir,
+                          size = excluded.size,
+                          content_version = excluded.content_version,
+                          metadata_version = excluded.metadata_version,
+                          remote_mtime = excluded.remote_mtime,
+                          updated_at = excluded.updated_at
+                        """
+                    ) { statement in
+                        try bind(sourceEntry: entry, to: statement)
+                        _ = try statement.step()
+                    }
+                }
+                try connection.execute("COMMIT")
+            } catch {
+                try? connection.execute("ROLLBACK")
+                throw error
+            }
+        }
+    }
+
     private func bind(item: SyncItem, to statement: SQLiteStatement) throws {
         try statement.bind(1, text: item.id)
         try statement.bind(2, text: item.parentID)
@@ -457,6 +644,22 @@ public final class SQLiteMetadataStore: MetadataStore, @unchecked Sendable {
         try statement.bind(8, text: transfer.state.rawValue)
         try statement.bind(9, int64: transfer.createdAt.epochSeconds)
         try statement.bind(10, int64: transfer.updatedAt.epochSeconds)
+    }
+
+    private func bind(sourceEntry: SourceEntry, to statement: SQLiteStatement) throws {
+        try statement.bind(1, text: sourceEntry.domainID)
+        try statement.bind(2, text: sourceEntry.sourceID)
+        try statement.bind(3, text: sourceEntry.itemID)
+        try statement.bind(4, text: sourceEntry.parentSourceID)
+        try statement.bind(5, text: sourceEntry.parentItemID)
+        try statement.bind(6, text: sourceEntry.relativePath)
+        try statement.bind(7, text: sourceEntry.name)
+        try statement.bind(8, int: sourceEntry.kind == .directory ? 1 : 0)
+        try statement.bind(9, int64: sourceEntry.size)
+        try statement.bind(10, text: sourceEntry.contentVersion)
+        try statement.bind(11, text: sourceEntry.metadataVersion)
+        try statement.bind(12, int64: sourceEntry.remoteModifiedAt?.epochSeconds)
+        try statement.bind(13, int64: sourceEntry.updatedAt.epochSeconds)
     }
 
     private func upsertCache(_ cache: ContentCacheRecord) throws {
@@ -572,6 +775,55 @@ public final class SQLiteMetadataStore: MetadataStore, @unchecked Sendable {
             createdAt: Date(epochSeconds: statement.int64(at: 8)),
             updatedAt: Date(epochSeconds: statement.int64(at: 9))
         )
+    }
+
+    private func decodeSourceEntry(_ statement: SQLiteStatement) -> SourceEntry {
+        SourceEntry(
+            sourceID: statement.text(at: 1) ?? "",
+            domainID: statement.text(at: 0) ?? "",
+            itemID: statement.text(at: 2) ?? "",
+            parentSourceID: statement.text(at: 3),
+            parentItemID: statement.text(at: 4),
+            relativePath: statement.text(at: 5) ?? "",
+            name: statement.text(at: 6) ?? "",
+            kind: statement.int(at: 7) == 1 ? .directory : .file,
+            size: statement.int64(at: 8),
+            contentVersion: statement.text(at: 9),
+            metadataVersion: statement.text(at: 10),
+            remoteModifiedAt: Date(epochSeconds: statement.int64OrNil(at: 11)),
+            updatedAt: Date(epochSeconds: statement.int64(at: 12))
+        )
+    }
+
+    private func decodeProviderChange(_ statement: SQLiteStatement) throws -> ProviderChange {
+        guard
+            let typeRaw = statement.text(at: 5),
+            let type = ProviderChangeType(rawValue: typeRaw)
+        else {
+            throw CloudPlaceholderError.invalidState("Unable to decode provider change")
+        }
+        return ProviderChange(
+            sequence: statement.int64(at: 0),
+            domainID: statement.text(at: 1) ?? "",
+            itemID: statement.text(at: 2) ?? "",
+            parentItemID: statement.text(at: 3),
+            previousParentItemID: statement.text(at: 4),
+            changeType: type,
+            deleted: statement.int(at: 6) == 1,
+            changedAt: Date(epochSeconds: statement.int64(at: 7))
+        )
+    }
+
+    private func latestProviderChangeSequenceLocked(domainID: String) throws -> Int64 {
+        try connection.withStatement(
+            "SELECT COALESCE(MAX(sequence), 0) FROM provider_changes WHERE domain_id = ?"
+        ) { statement in
+            try statement.bind(1, text: domainID)
+            guard try statement.step() else {
+                return 0
+            }
+            return statement.int64(at: 0)
+        }
     }
 }
 

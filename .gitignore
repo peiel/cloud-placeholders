@@ -9,6 +9,7 @@ macos/.tmp
 macos/.xcode-home
 macos/.xcode-package-cache
 macos/.xcode-source-packages
+macos/Config/Signing.local.xcconfig
 .DS_Store
 **/.DS_Store
 **/._*

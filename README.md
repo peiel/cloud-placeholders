@@ -1,101 +1,128 @@
 # Enterprise Cloud Placeholder Sync v1
 
-一个从零起步的企业私有云占位符同步系统原型，目标是验证以下三件事：
+一个面向 macOS File Provider 的原型工程，用来验证两条端到端链路：
 
-- `macOS` 客户端能以 `File Provider` 语义建模 Finder 占位符目录
-- 本地同步核心能基于 `SQLite` 跑通增量同步、按需下载、上传和驱逐
-- 服务端能提供最小可用的 `Control Plane + Data Plane` mock API
+- `Mock Server` 后端：保留现有 HTTP mock，同步、下载、上传、改名、删除都可回归
+- `Local Directory` 后端：把任意本地目录或外接盘目录映射成 Finder 可见的 File Provider 树
+
+当前仓库已经接通：
+
+- App / Extension 共享配置与共享 SQLite 状态库
+- 启动时首轮 `syncDown()`，Finder 首次枚举会等待最小同步完成
+- 本地目录后端的全量扫描、增量 diff、按需 materialize、Finder 写回
+- `provider_changes` 驱动的 working set / 容器增量枚举
+- 菜单栏 App 托管的 `FSEvents` 监听与 debounce 同步
+- 可提交到仓库的签名 `.xcconfig`，以及本机覆盖用的 `Signing.local.xcconfig`
 
 ## 目录结构
 
 - `client/`
-  - `CloudPlaceholderDomain`：共享领域模型、状态枚举、schema、repo 协议
-  - `CloudPlaceholderPersistence`：SQLite bridge 与状态库实现
-  - `CloudPlaceholderSync`：同步核心、HTTP remote client、上传/下载/驱逐流程
-  - `CloudPlaceholderFileProviderKit`：可嵌入 Xcode extension target 的 File Provider bridge
+  - `CloudPlaceholderDomain`：领域模型、schema、共享协议
+  - `CloudPlaceholderPersistence`：SQLite bridge 与状态库
+  - `CloudPlaceholderSync`：同步引擎、HTTP / 本地目录后端、共享运行时
+  - `CloudPlaceholderFileProviderKit`：File Provider bridge
   - `cloudsync-demo`：命令行 demo
 - `macos/`
-  - `EnterpriseCloudDrive.xcodeproj`：真正的 macOS App + File Provider Extension 工程
-  - `EnterpriseCloudDriveApp`：菜单栏 App、domain 注册、mock server 配置入口
-  - `EnterpriseCloudDriveFileProvider`：`NSFileProviderReplicatedExtension` principal class
+  - `EnterpriseCloudDriveApp`：菜单栏 App、配置 UI、domain 注册、目录监听
+  - `EnterpriseCloudDriveFileProvider`：`NSFileProviderReplicatedExtension`
+  - `Config/`：entitlements、签名 xcconfig
 - `server/`
   - `mock-server.mjs`：无外部依赖的 mock server
   - `admin-console.html`：简单管理台
 - `docs/`
-  - 产品、接口、架构与开发文档
-- `data/`
-  - mock server 对象数据与元数据持久化目录
+  - 接口、架构、联调手册
 
-## 已实现内容
+## 已实现能力
 
-- 本地 SQLite 状态库与 5 张核心表
-- 远端变更拉取、按需下载、上传提交、冷文件驱逐
-- 忽略 `.DS_Store`、`._*`、Office 锁文件等系统噪音
-- 基于 `NSFileProviderItem` / `NSFileProviderEnumerator` 的桥接层
-- 一个可由 `xcodebuild` 成功编译的 `macOS App + File Provider Extension` 工程
-- 设备注册、增量变更、Range 下载、审计查询的 mock API
-- Swift 测试与 Node 测试
+- `syncDown()` 已接入 App 启动和 Extension 启动兜底链路
+- `RemoteAPIClient` 已支持文件写入、目录创建、重命名 / 移动、删除
+- `LocalDirectoryRemoteAPIClient` 已支持目录扫描 diff 与直接回写源目录
+- `source_entries` 持久化源目录索引，`provider_changes` 持久化 File Provider 增量锚点
+- Finder 写操作统一走 `SyncEngine.stage* + flushPendingOperations()`
+- 每次同步或本地写回后都会 signal `.workingSet`、`.rootContainer` 和受影响目录
+- App / appex 都支持 security-scoped bookmark 解析；外接盘断开时保留最近一次索引结果
 
 ## 快速开始
 
-### 1. 跑客户端测试
+### 1. 跑 Swift 测试
 
 ```bash
-cd client
+cd /Users/peiel/Project/cloud-placeholders/client
 swift test --disable-sandbox
 ```
 
-### 2. 跑服务端测试
+### 2. 跑 Node 测试
 
 ```bash
-cd server
+cd /Users/peiel/Project/cloud-placeholders/server
 node --test mock-server.test.mjs
 ```
 
 ### 3. 启动 mock server
 
 ```bash
-cd server
+cd /Users/peiel/Project/cloud-placeholders/server
 node mock-server.mjs
 ```
 
-启动后可访问：
+健康检查与管理台：
 
-- `http://127.0.0.1:8787/health`
-- `http://127.0.0.1:8787/admin`
+- [health](http://127.0.0.1:8787/health)
+- [admin](http://127.0.0.1:8787/admin)
 
-### 4. 运行客户端 demo
+### 4. 构建 macOS App + File Provider Extension
 
-```bash
-cd client
-MOCK_SERVER_URL=http://127.0.0.1:8787 swift run cloudsync-demo --disable-sandbox
-```
-
-如果不设置 `MOCK_SERVER_URL`，demo 会只初始化本地状态库。
-
-### 5. 构建 macOS App + File Provider Extension
+无签名开发构建：
 
 ```bash
-cd macos
+cd /Users/peiel/Project/cloud-placeholders/macos
 xcodebuild -project EnterpriseCloudDrive.xcodeproj -scheme EnterpriseCloudDrive -configuration Debug CODE_SIGNING_ALLOWED=NO build
 ```
 
-Xcode 工程入口：
+这个路径只验证编译，不会让 Finder 里的 File Provider 真正生效。
 
-- [EnterpriseCloudDrive.xcodeproj](/Users/peiel/Documents/Codex/2026-04-17-icloud-onedrive-cloud-placeholders-1-the/macos/EnterpriseCloudDrive.xcodeproj/project.pbxproj)
-- [EnterpriseCloudDriveApp.swift](/Users/peiel/Documents/Codex/2026-04-17-icloud-onedrive-cloud-placeholders-1-the/macos/EnterpriseCloudDriveApp/EnterpriseCloudDriveApp.swift)
-- [FileProviderExtension.swift](/Users/peiel/Documents/Codex/2026-04-17-icloud-onedrive-cloud-placeholders-1-the/macos/EnterpriseCloudDriveFileProvider/FileProviderExtension.swift)
+### 5. 真机联调两种模式
+
+`Mock Server`：
+
+- 启动菜单栏 App
+- 在 Settings 里选择 `Mock Server`
+- 设置 `Mock Server URL`
+- 点击“注册 File Provider Domain”
+
+`Local Directory`：
+
+- 启动菜单栏 App
+- 在 Settings 里选择 `Local Directory`
+- 选择一个本地目录或外接盘目录
+- 点击“注册 File Provider Domain”
+- 等待首轮同步完成后，在 Finder 中查看根目录树
+
+签名与 Finder 真机联调步骤见：
+
+- [开发运行手册](/Users/peiel/Project/cloud-placeholders/docs/dev-runbook.md)
 
 ## 当前边界
 
-- 现在已有完整的 Xcode `App + File Provider Extension target`，但仍是开发态工程
-- `CloudPlaceholderFileProviderKit` 已被接入 extension principal class，但 Finder 侧真实行为仍需带 entitlement 的安装运行验证
-- 服务端仍是单进程 mock，不包含真实身份系统、对象存储适配器和多租户隔离
-- v1 原型以“文件级同步正确性”优先，尚未实现 partial fetch / push notification
+- 第一阶段只支持一个 source root / 一个 File Provider domain
+- `Local Directory` fallback 仍优先依赖文件系统 resource identifier；缺失时会退回生成式 source id
+- mock server 仍是单进程本地实现，不包含真实认证、对象存储或推送唤醒
+- 真正的 Finder 行为仍需要带有效 Apple Developer 签名的本机安装验证
+
+## 代码入口
+
+- [SyncEngine.swift](/Users/peiel/Project/cloud-placeholders/client/Sources/CloudPlaceholderSync/SyncEngine.swift)
+- [CloudDriveSharedRuntime.swift](/Users/peiel/Project/cloud-placeholders/client/Sources/CloudPlaceholderSync/CloudDriveSharedRuntime.swift)
+- [LocalDirectoryRemoteAPIClient.swift](/Users/peiel/Project/cloud-placeholders/client/Sources/CloudPlaceholderSync/LocalDirectoryRemoteAPIClient.swift)
+- [PlaceholderFileProviderBridge.swift](/Users/peiel/Project/cloud-placeholders/client/Sources/CloudPlaceholderFileProviderKit/PlaceholderFileProviderBridge.swift)
+- [EnterpriseCloudDriveApp.swift](/Users/peiel/Project/cloud-placeholders/macos/EnterpriseCloudDriveApp/EnterpriseCloudDriveApp.swift)
+- [SourceDirectoryWatcher.swift](/Users/peiel/Project/cloud-placeholders/macos/EnterpriseCloudDriveApp/SourceDirectoryWatcher.swift)
+- [FileProviderExtension.swift](/Users/peiel/Project/cloud-placeholders/macos/EnterpriseCloudDriveFileProvider/FileProviderExtension.swift)
+- [Signing.xcconfig](/Users/peiel/Project/cloud-placeholders/macos/Config/Signing.xcconfig)
 
 ## 文档入口
 
-- [产品设计](/Users/peiel/Documents/Codex/2026-04-17-icloud-onedrive-cloud-placeholders-1-the/docs/product-design.md)
-- [接口契约](/Users/peiel/Documents/Codex/2026-04-17-icloud-onedrive-cloud-placeholders-1-the/docs/api-contract.md)
-- [架构图与流转图](/Users/peiel/Documents/Codex/2026-04-17-icloud-onedrive-cloud-placeholders-1-the/docs/architecture.md)
-- [开发运行手册](/Users/peiel/Documents/Codex/2026-04-17-icloud-onedrive-cloud-placeholders-1-the/docs/dev-runbook.md)
+- [产品设计](/Users/peiel/Project/cloud-placeholders/docs/product-design.md)
+- [接口契约](/Users/peiel/Project/cloud-placeholders/docs/api-contract.md)
+- [架构图与流转图](/Users/peiel/Project/cloud-placeholders/docs/architecture.md)
+- [开发运行手册](/Users/peiel/Project/cloud-placeholders/docs/dev-runbook.md)

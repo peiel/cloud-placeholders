@@ -161,7 +161,7 @@ export function applyDeviceRegistration(state, payload) {
   return state.policies;
 }
 
-export async function applyBinaryUpload(state, { itemID, fileName, body, sha256, baseContentVersion }) {
+export async function applyBinaryUpload(state, { itemID, fileName, parentID, body, sha256, baseContentVersion }) {
   const existing = state.items[itemID];
   if (existing && baseContentVersion && existing.contentVersion !== baseContentVersion) {
     throw new Error(`Version conflict: expected ${existing.contentVersion}, got ${baseContentVersion}`);
@@ -174,7 +174,7 @@ export async function applyBinaryUpload(state, { itemID, fileName, body, sha256,
   const versionNumber = state.sequence + 1;
   const item = makeItem({
     id: itemID,
-    parentID: existing?.parentID || "root",
+    parentID: parentID || existing?.parentID || "root",
     name: fileName || existing?.name || `${itemID}.bin`,
     kind: "file",
     size: body.byteLength,
@@ -193,6 +193,32 @@ export async function applyBinaryUpload(state, { itemID, fileName, body, sha256,
     action: existing ? "item.modify" : "item.create",
     itemID,
     metadata: { fileName: item.name }
+  });
+  return { item, remoteCursor: String(state.sequence) };
+}
+
+export function applyDirectoryCreate(state, { itemID, fileName, parentID }) {
+  const versionNumber = state.sequence + 1;
+  const item = makeItem({
+    id: itemID,
+    parentID: parentID || "root",
+    name: fileName || `${itemID}`,
+    kind: "directory",
+    size: 0,
+    contentVersion: null,
+    metadataVersion: `m${versionNumber}`,
+    remoteModifiedAt: nowISO(),
+    updatedAt: nowISO(),
+    createdAt: nowISO()
+  });
+  state.items[itemID] = item;
+  addChange(state, item, "upsert");
+  addAudit(state, {
+    tenantID: "tenant-demo",
+    actorID: "peiel",
+    action: "item.mkdir",
+    itemID,
+    metadata: { fileName: item.name, parentID: item.parentID }
   });
   return { item, remoteCursor: String(state.sequence) };
 }
@@ -297,6 +323,7 @@ async function handleRequest(request, response) {
       const payload = await applyBinaryUpload(state, {
         itemID,
         fileName: url.searchParams.get("name"),
+        parentID: url.searchParams.get("parentId"),
         body,
         sha256: request.headers["x-content-sha256"],
         baseContentVersion: request.headers["x-base-content-version"] || null
@@ -306,6 +333,18 @@ async function handleRequest(request, response) {
     } catch (error) {
       return text(response, 409, error.message);
     }
+  }
+
+  if (request.method === "POST" && route[0] === "api" && route[1] === "items" && route[3] === "directory") {
+    const itemID = route[2];
+    const payload = JSON.parse((await parseBody(request)).toString("utf8"));
+    const result = applyDirectoryCreate(state, {
+      itemID,
+      fileName: payload.name,
+      parentID: payload.parentID
+    });
+    await saveState(state);
+    return json(response, 200, result);
   }
 
   if (request.method === "PATCH" && route[0] === "api" && route[1] === "items" && route.length === 3) {
@@ -333,7 +372,7 @@ async function handleRequest(request, response) {
       metadata: payload
     });
     await saveState(state);
-    return json(response, 200, item);
+    return json(response, 200, { item, remoteCursor: String(state.sequence) });
   }
 
   if (request.method === "DELETE" && route[0] === "api" && route[1] === "items" && route.length === 3) {
@@ -352,7 +391,7 @@ async function handleRequest(request, response) {
       metadata: {}
     });
     await saveState(state);
-    return json(response, 200, { ok: true });
+    return json(response, 200, { ok: true, remoteCursor: String(state.sequence) });
   }
 
   if (request.method === "GET" && url.pathname === "/api/admin/devices") {

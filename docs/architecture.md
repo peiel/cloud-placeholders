@@ -1,164 +1,164 @@
 # Enterprise Cloud Placeholder Sync v1 架构图
 
-这份文档描述的是当前仓库里已经落地的实现结构，不是未来完整产品的目标态蓝图。
+这份文档描述的是仓库当前已经落地的实现结构。
 
 ## 当前实现架构图
 
 ```mermaid
 flowchart LR
-    User["用户 / Finder / 本地文档应用"] --> App["EnterpriseCloudDriveApp<br/>菜单栏 App / Settings"]
+    User["用户 / Finder / 本地应用"] --> App["EnterpriseCloudDriveApp<br/>菜单栏 App / Settings / Watcher"]
     User --> FP["EnterpriseCloudDriveFileProvider<br/>NSFileProviderReplicatedExtension"]
 
     App --> Installer["FileProviderDomainInstaller"]
     Installer --> System["NSFileProviderManager.add(primary)"]
-    App --> Defaults["App Group UserDefaults<br/>MockServerURL"]
+    App --> Config["CloudDriveSharedConfigurationStore<br/>App Group UserDefaults"]
+    App --> Watcher["SourceDirectoryWatcher<br/>FSEvents + debounce"]
 
     System --> FP
-    FP --> Runtime["ExtensionRuntime.bootstrap"]
+    App --> Runtime["CloudDriveRuntime.bootstrap"]
+    FP --> Runtime
+
     Runtime --> Shared["App Group Shared Container<br/>EnterpriseCloudDriveShared/primary"]
     Runtime --> Store["SQLiteMetadataStore<br/>state.sqlite"]
     Runtime --> Cache["cache/"]
     Runtime --> Staging["staging/"]
+    Runtime --> Lock["sync.lock"]
     Runtime --> Sync["SyncEngine"]
-    Runtime --> Controller["ProviderDomainController"]
-    Runtime --> Defaults
-
-    Controller --> Bridge["PlaceholderEnumerator / PlaceholderFileProviderItem"]
-    Controller --> Store
-    Controller --> Sync
+    Runtime --> Bootstrap["SyncBootstrapCoordinator"]
 
     Sync --> Store
-    Sync --> Cache
-    Sync --> Staging
     Sync --> API["HTTPRemoteAPIClient"]
+    Sync --> Local["LocalDirectoryRemoteAPIClient"]
+
+    Watcher --> Bootstrap
+    Bootstrap --> Sync
+
+    FP --> Bridge["ProviderDomainController<br/>PlaceholderEnumerator"]
+    Bridge --> Store
+    Bridge --> Bootstrap
 
     API --> Server["mock-server.mjs"]
-    Admin["admin-console.html"] --> Server
-    Server --> State["data/server-state.json<br/>items / changes / devices / audit / policies"]
-    Server --> Blob["data/blob-store"]
+    Local --> Source["本地目录 / 外接盘目录"]
+    Server --> Data["data/server-state.json + blob-store"]
 ```
 
 ## 关键流转图
 
-### 1. 启动与挂载
+### 1. 启动、注册与首轮同步
 
 ```mermaid
 sequenceDiagram
     participant User as 用户
     participant App as EnterpriseCloudDriveApp
-    participant Defaults as App Group UserDefaults
+    participant Config as SharedConfiguration
     participant Installer as FileProviderDomainInstaller
     participant System as NSFileProviderManager
     participant FP as FileProviderExtension
-    participant Shared as Shared Container
-    participant DB as SQLiteMetadataStore
+    participant Bootstrap as SyncBootstrapCoordinator
+    participant Sync as SyncEngine
+    participant Store as SQLiteMetadataStore
 
-    User->>App: 配置 Mock Server URL
-    App->>Defaults: 保存 MockServerURL
-    User->>App: 点击“注册 File Provider Domain”
+    User->>App: 选择 Backend / 目录 / Mock URL
+    App->>Config: 保存 backendKind / bookmark / displayName
+    User->>App: 注册 File Provider Domain
     App->>Installer: installPrimaryDomain()
-    Installer->>System: add(primary)
+    Installer->>System: add(primary) 或复用已有 domain
     System-->>FP: 拉起 extension
-    FP->>Shared: 定位 EnterpriseCloudDriveShared/primary
-    FP->>DB: 打开/初始化 state.sqlite
-    FP->>Defaults: 读取 MockServerURL
-    FP->>FP: 构造 SyncEngine + ProviderDomainController
+    App->>Bootstrap: ensureInitialSync()
+    FP->>Bootstrap: ensureInitialSync() 兜底
+    Bootstrap->>Sync: syncDown()
+    Sync->>Store: 写入 items / source_entries / provider_changes / sync_state
+    FP->>FP: Finder 首次枚举前等待最小同步完成
 ```
 
-### 2. 按需下载
+### 2. Local Directory 扫描与回放
+
+```mermaid
+sequenceDiagram
+    participant App as EnterpriseCloudDriveApp
+    participant Watcher as SourceDirectoryWatcher
+    participant Bootstrap as SyncBootstrapCoordinator
+    participant Sync as SyncEngine
+    participant Local as LocalDirectoryRemoteAPIClient
+    participant Source as 本地目录 / 外接盘
+    participant Store as SQLiteMetadataStore
+    participant Finder as Finder
+
+    App->>Watcher: 启动 FSEvents
+    Source-->>Watcher: 文件变化事件
+    Watcher->>Bootstrap: debounce 后触发 forceSync()
+    Bootstrap->>Sync: syncDown()
+    Sync->>Local: fetchChanges(cursor)
+    Local->>Source: 递归扫描目录树
+    Local->>Store: 更新 source_entries
+    Sync->>Store: 追加 provider_changes
+    Sync-->>Finder: signal workingSet / root / 受影响目录
+```
+
+### 3. Finder 写入回写源目录
 
 ```mermaid
 sequenceDiagram
     participant Finder as Finder / 本地应用
     participant FP as FileProviderExtension
+    participant Sync as SyncEngine
+    participant Local as LocalDirectoryRemoteAPIClient
+    participant Source as 本地目录 / 外接盘
+    participant Store as SQLiteMetadataStore
+
+    Finder->>FP: createItem / modifyItem / deleteItem
+    FP->>Sync: stageLocalFile / stageDirectoryCreation / stageMetadataChange / stageDeletion
+    FP->>Sync: flushPendingOperations()
+    Sync->>Local: uploadContent / createDirectory / updateMetadata / deleteItem
+    Local->>Source: 直接复制、mkdir、rename、move、delete
+    Sync->>Store: 更新 items / source_entries / provider_changes / sync_state
+    FP-->>Finder: signal 增量枚举
+```
+
+### 4. 按需 materialize
+
+```mermaid
+sequenceDiagram
+    participant Finder as Finder
+    participant FP as FileProviderExtension
     participant Ctrl as ProviderDomainController
     participant Sync as SyncEngine
-    participant DB as SQLiteMetadataStore
-    participant Server as mock-server
-    participant Blob as blob-store
+    participant Remote as HTTPRemoteAPIClient / LocalDirectoryRemoteAPIClient
+    participant Cache as cache/
+    participant Store as SQLiteMetadataStore
 
     Finder->>FP: fetchContents(itemID)
     FP->>Ctrl: fetchContents(for:into:)
     Ctrl->>Sync: materializeItem(itemID, cacheDirectory)
-    Sync->>DB: 读取 item / 写入 download transfer
-    Sync->>Server: GET /api/items/:id/content
-    Server->>Blob: 读取文件字节
-    Server-->>Sync: 返回内容
-    Sync->>Server: GET /api/items/:id
-    Server-->>Sync: 返回最新元数据
-    Sync->>Sync: temp 文件移动到 cache/
-    Sync->>DB: markHydrated + upsert item
-    Ctrl-->>FP: 返回本地 URL + NSFileProviderItem
-    FP-->>Finder: 文件可打开
+    Sync->>Remote: downloadContent(itemID)
+    Remote-->>Sync: 返回内容与最新元数据
+    Sync->>Cache: 写入 materialized 文件
+    Sync->>Store: markHydrated + upsert item
+    Ctrl-->>Finder: 返回本地 URL + NSFileProviderItem
 ```
 
-### 3. 本地修改上传
+## 当前关键点
 
-```mermaid
-sequenceDiagram
-    participant User as 用户 / 本地应用
-    participant FP as FileProviderExtension
-    participant Sync as SyncEngine
-    participant DB as SQLiteMetadataStore
-    participant Server as mock-server
-    participant State as server-state.json
-    participant Blob as blob-store
-
-    User->>FP: createItem / modifyItem
-    FP->>FP: cloneSystemOwnedFile() 复制到 staging/
-    FP->>Sync: stageLocalFile(itemID, parentID, fileURL)
-    Sync->>DB: upsert item + enqueue pending op
-    FP->>Sync: flushPendingUploads()
-    Sync->>Server: POST /api/items/:id/content
-    Server->>Blob: 写入二进制内容
-    Server->>State: 更新 items / changes / audit / version
-    Server-->>Sync: 返回 RemoteCommitResult
-    Sync->>DB: 更新 contentVersion / remoteCursor / op done
-    FP-->>User: 修改完成并已提交
-```
-
-### 4. 冷文件驱逐
-
-```mermaid
-sequenceDiagram
-    participant Policy as 缓存策略调用方
-    participant Sync as SyncEngine
-    participant DB as SQLiteMetadataStore
-    participant Cache as 本地 cache/
-
-    Policy->>Sync: evictColdFiles(maximumCachedBytes)
-    Sync->>DB: totalCachedBytes()
-    Sync->>DB: evictionCandidates(hydrated=1, dirty=0, pinned=0)
-    Sync->>Cache: 删除本地 materialized 文件
-    Sync->>DB: markCloudOnly(itemID)
-```
-
-## 当前态与目标态差距
-
-- 已打通：
-  - App 侧 domain 注册
-  - Extension 启动与共享运行时初始化
-  - 文件内容按需下载
-  - 本地文件修改后上传
-  - 基于 SQLite 的缓存与驱逐状态管理
-- 还未完全打通：
-  - `syncDown()` 尚未自动接入 App 或 Extension 的首轮同步流程
-  - 设备注册 `register(device)` 已在同步层实现，但尚未接进 macOS 主链路
-  - 目录创建、删除、重命名、移动还没有完整的远端元数据闭环
-  - 自动驱逐逻辑已实现，但还没有接成常驻后台调度
-  - Finder 真实占位符体验仍需带 entitlement 的安装运行验证
+- 首轮同步已经接入 App 启动与 Extension 启动兜底，不再要求用户先手工点一次同步
+- `sync.lock` 用于串行化 App 与 appex 对同一 `state.sqlite` 的写入
+- `workingSetCursor` 明确作为 File Provider 增量锚点，不再复用 `remoteCursor`
+- `provider_changes` 负责 working set 与父目录增量枚举，删除会级联记录整棵子树
+- `Local Directory` watcher 常驻在菜单栏 App，Extension 只做被系统拉起时的兜底同步
 
 ## 代码映射
 
 - App:
-  - [EnterpriseCloudDriveApp.swift](/Users/peiel/Documents/Codex/2026-04-17-icloud-onedrive-cloud-placeholders-1-the/macos/EnterpriseCloudDriveApp/EnterpriseCloudDriveApp.swift)
-  - [FileProviderDomainInstaller.swift](/Users/peiel/Documents/Codex/2026-04-17-icloud-onedrive-cloud-placeholders-1-the/macos/EnterpriseCloudDriveApp/FileProviderDomainInstaller.swift)
-- File Provider:
-  - [FileProviderExtension.swift](/Users/peiel/Documents/Codex/2026-04-17-icloud-onedrive-cloud-placeholders-1-the/macos/EnterpriseCloudDriveFileProvider/FileProviderExtension.swift)
-  - [PlaceholderFileProviderBridge.swift](/Users/peiel/Documents/Codex/2026-04-17-icloud-onedrive-cloud-placeholders-1-the/client/Sources/CloudPlaceholderFileProviderKit/PlaceholderFileProviderBridge.swift)
-- Sync:
-  - [SyncEngine.swift](/Users/peiel/Documents/Codex/2026-04-17-icloud-onedrive-cloud-placeholders-1-the/client/Sources/CloudPlaceholderSync/SyncEngine.swift)
-  - [SQLiteStore.swift](/Users/peiel/Documents/Codex/2026-04-17-icloud-onedrive-cloud-placeholders-1-the/client/Sources/CloudPlaceholderPersistence/SQLiteStore.swift)
-- Server:
-  - [mock-server.mjs](/Users/peiel/Documents/Codex/2026-04-17-icloud-onedrive-cloud-placeholders-1-the/server/mock-server.mjs)
-  - [admin-console.html](/Users/peiel/Documents/Codex/2026-04-17-icloud-onedrive-cloud-placeholders-1-the/server/admin-console.html)
+  - [EnterpriseCloudDriveApp.swift](/Users/peiel/Project/cloud-placeholders/macos/EnterpriseCloudDriveApp/EnterpriseCloudDriveApp.swift)
+  - [SourceDirectoryWatcher.swift](/Users/peiel/Project/cloud-placeholders/macos/EnterpriseCloudDriveApp/SourceDirectoryWatcher.swift)
+  - [FileProviderDomainInstaller.swift](/Users/peiel/Project/cloud-placeholders/macos/EnterpriseCloudDriveApp/FileProviderDomainInstaller.swift)
+- Shared runtime / sync:
+  - [CloudDriveSharedRuntime.swift](/Users/peiel/Project/cloud-placeholders/client/Sources/CloudPlaceholderSync/CloudDriveSharedRuntime.swift)
+  - [SyncEngine.swift](/Users/peiel/Project/cloud-placeholders/client/Sources/CloudPlaceholderSync/SyncEngine.swift)
+  - [LocalDirectoryRemoteAPIClient.swift](/Users/peiel/Project/cloud-placeholders/client/Sources/CloudPlaceholderSync/LocalDirectoryRemoteAPIClient.swift)
+- Persistence / File Provider:
+  - [Schema.swift](/Users/peiel/Project/cloud-placeholders/client/Sources/CloudPlaceholderDomain/Schema.swift)
+  - [SQLiteStore.swift](/Users/peiel/Project/cloud-placeholders/client/Sources/CloudPlaceholderPersistence/SQLiteStore.swift)
+  - [PlaceholderFileProviderBridge.swift](/Users/peiel/Project/cloud-placeholders/client/Sources/CloudPlaceholderFileProviderKit/PlaceholderFileProviderBridge.swift)
+  - [FileProviderExtension.swift](/Users/peiel/Project/cloud-placeholders/macos/EnterpriseCloudDriveFileProvider/FileProviderExtension.swift)
+- Mock backend:
+  - [mock-server.mjs](/Users/peiel/Project/cloud-placeholders/server/mock-server.mjs)

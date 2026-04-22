@@ -53,7 +53,7 @@ struct CloudSyncDemo {
             try "hello from cloud placeholder demo\n".write(to: sampleFile, atomically: true, encoding: .utf8)
         }
         _ = try engine.stageLocalFile(itemID: "demo-hello", parentID: "root", fileURL: sampleFile)
-        try await engine.flushPendingUploads()
+        try await engine.flushPendingOperations()
         print("本地文件已上传：\(sampleFile.lastPathComponent)")
     }
 

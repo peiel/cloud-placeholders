@@ -48,6 +48,9 @@ private func sqlite3_finalize(_ statement: OpaquePointer?) -> Int32
 @_silgen_name("sqlite3_errmsg")
 private func sqlite3_errmsg(_ db: OpaquePointer?) -> UnsafePointer<CChar>?
 
+@_silgen_name("sqlite3_last_insert_rowid")
+private func sqlite3_last_insert_rowid(_ db: OpaquePointer?) -> Int64
+
 @_silgen_name("sqlite3_bind_text")
 private func sqlite3_bind_text(
     _ statement: OpaquePointer?,
@@ -127,6 +130,10 @@ final class SQLiteConnection {
             return "Unknown SQLite error"
         }
         return String(cString: ptr)
+    }
+
+    var lastInsertRowID: Int64 {
+        sqlite3_last_insert_rowid(handle)
     }
 }
 

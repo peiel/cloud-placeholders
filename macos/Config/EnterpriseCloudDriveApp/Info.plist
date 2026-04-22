@@ -20,6 +20,8 @@
 	<string>1</string>
 	<key>LSMinimumSystemVersion</key>
 	<string>15.0</string>
+	<key>NSFileProviderDomainUsageDescription</key>
+	<string>Show cloud-synced files in Finder</string>
 	<key>NSPrincipalClass</key>
 	<string>NSApplication</string>
 </dict>

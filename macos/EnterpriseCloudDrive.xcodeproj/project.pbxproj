@@ -12,6 +12,8 @@
 		00000000000000000000001A /* CloudPlaceholderPersistence in Frameworks */ = {isa = PBXBuildFile; productRef = 000000000000000000000016 /* CloudPlaceholderPersistence */; };
 		00000000000000000000001B /* CloudPlaceholderSync in Frameworks */ = {isa = PBXBuildFile; productRef = 000000000000000000000017 /* CloudPlaceholderSync */; };
 		00000000000000000000001C /* CloudPlaceholderFileProviderKit in Frameworks */ = {isa = PBXBuildFile; productRef = 000000000000000000000018 /* CloudPlaceholderFileProviderKit */; };
+		000000000000000000000029 /* CloudPlaceholderDomain in Frameworks */ = {isa = PBXBuildFile; productRef = 000000000000000000000015 /* CloudPlaceholderDomain */; };
+		00000000000000000000002A /* CloudPlaceholderSync in Frameworks */ = {isa = PBXBuildFile; productRef = 000000000000000000000017 /* CloudPlaceholderSync */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -40,7 +42,11 @@
 
 /* Begin PBXFileReference section */
 		000000000000000000000006 /* EnterpriseCloudDrive.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = EnterpriseCloudDrive.app; sourceTree = BUILT_PRODUCTS_DIR; };
-		000000000000000000000007 /* EnterpriseCloudDriveFileProvider.appex */ = {isa = PBXFileReference; explicitFileType = wrapper.app-extension; includeInIndex = 0; path = EnterpriseCloudDriveFileProvider.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		000000000000000000000007 /* EnterpriseCloudDriveFileProvider.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = EnterpriseCloudDriveFileProvider.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		000000000000000000000030 /* Config/Signing.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Config/Signing.xcconfig; sourceTree = "<group>"; };
+		000000000000000000000031 /* Config/EnterpriseCloudDriveApp/Build.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Config/EnterpriseCloudDriveApp/Build.xcconfig; sourceTree = "<group>"; };
+		000000000000000000000032 /* Config/EnterpriseCloudDriveFileProvider/Build.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Config/EnterpriseCloudDriveFileProvider/Build.xcconfig; sourceTree = "<group>"; };
+		000000000000000000000033 /* Config/Signing.local.xcconfig.example */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Config/Signing.local.xcconfig.example; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -61,6 +67,8 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				000000000000000000000029 /* CloudPlaceholderDomain in Frameworks */,
+				00000000000000000000002A /* CloudPlaceholderSync in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -83,6 +91,7 @@
 			children = (
 				000000000000000000000004 /* EnterpriseCloudDriveApp */,
 				000000000000000000000005 /* EnterpriseCloudDriveFileProvider */,
+				00000000000000000000002F /* Config */,
 				000000000000000000000003 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -94,6 +103,17 @@
 				000000000000000000000007 /* EnterpriseCloudDriveFileProvider.appex */,
 			);
 			name = Products;
+			sourceTree = "<group>";
+		};
+		00000000000000000000002F /* Config */ = {
+			isa = PBXGroup;
+			children = (
+				000000000000000000000030 /* Config/Signing.xcconfig */,
+				000000000000000000000031 /* Config/EnterpriseCloudDriveApp/Build.xcconfig */,
+				000000000000000000000032 /* Config/EnterpriseCloudDriveFileProvider/Build.xcconfig */,
+				000000000000000000000033 /* Config/Signing.local.xcconfig.example */,
+			);
+			name = Config;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -118,6 +138,8 @@
 			);
 			name = EnterpriseCloudDrive;
 			packageProductDependencies = (
+				000000000000000000000015 /* CloudPlaceholderDomain */,
+				000000000000000000000017 /* CloudPlaceholderSync */,
 			);
 			productName = EnterpriseCloudDrive;
 			productReference = 000000000000000000000006 /* EnterpriseCloudDrive.app */;
@@ -275,13 +297,15 @@
 		};
 		000000000000000000000023 /* Debug */ = {
 			isa = XCBuildConfiguration;
+			baseConfigurationReference = 000000000000000000000031 /* Config/EnterpriseCloudDriveApp/Build.xcconfig */;
 			buildSettings = {
 				CODE_SIGN_ENTITLEMENTS = Config/EnterpriseCloudDriveApp/EnterpriseCloudDrive.entitlements;
-				CODE_SIGNING_ALLOWED = NO;
-				CODE_SIGN_STYLE = Manual;
+				CODE_SIGN_IDENTITY = "Apple Development";
+				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = "";
+				DEVELOPMENT_TEAM = 8GSW97W8QB;
+				ENABLE_APP_SANDBOX = NO;
 				ENABLE_HARDENED_RUNTIME = YES;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = Config/EnterpriseCloudDriveApp/Info.plist;
@@ -292,19 +316,22 @@
 				MARKETING_VERSION = 0.1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.peiel.enterprisecloud.drive;
 				PRODUCT_NAME = EnterpriseCloudDrive;
+				PROVISIONING_PROFILE_SPECIFIER = "";
 				SWIFT_VERSION = 6.0;
 			};
 			name = Debug;
 		};
 		000000000000000000000024 /* Release */ = {
 			isa = XCBuildConfiguration;
+			baseConfigurationReference = 000000000000000000000031 /* Config/EnterpriseCloudDriveApp/Build.xcconfig */;
 			buildSettings = {
 				CODE_SIGN_ENTITLEMENTS = Config/EnterpriseCloudDriveApp/EnterpriseCloudDrive.entitlements;
-				CODE_SIGNING_ALLOWED = NO;
-				CODE_SIGN_STYLE = Manual;
+				CODE_SIGN_IDENTITY = "Apple Development";
+				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = "";
+				DEVELOPMENT_TEAM = 8GSW97W8QB;
+				ENABLE_APP_SANDBOX = NO;
 				ENABLE_HARDENED_RUNTIME = YES;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = Config/EnterpriseCloudDriveApp/Info.plist;
@@ -315,19 +342,22 @@
 				MARKETING_VERSION = 0.1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.peiel.enterprisecloud.drive;
 				PRODUCT_NAME = EnterpriseCloudDrive;
+				PROVISIONING_PROFILE_SPECIFIER = "";
 				SWIFT_VERSION = 6.0;
 			};
 			name = Release;
 		};
 		000000000000000000000026 /* Debug */ = {
 			isa = XCBuildConfiguration;
+			baseConfigurationReference = 000000000000000000000032 /* Config/EnterpriseCloudDriveFileProvider/Build.xcconfig */;
 			buildSettings = {
 				APPLICATION_EXTENSION_API_ONLY = YES;
 				CODE_SIGN_ENTITLEMENTS = Config/EnterpriseCloudDriveFileProvider/EnterpriseCloudDriveFileProvider.entitlements;
-				CODE_SIGNING_ALLOWED = NO;
-				CODE_SIGN_STYLE = Manual;
+				CODE_SIGN_IDENTITY = "Apple Development";
+				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = "";
+				DEVELOPMENT_TEAM = 8GSW97W8QB;
+				ENABLE_APP_SANDBOX = NO;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = Config/EnterpriseCloudDriveFileProvider/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -339,6 +369,7 @@
 				MARKETING_VERSION = 0.1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.peiel.enterprisecloud.drive.fileprovider;
 				PRODUCT_NAME = EnterpriseCloudDriveFileProvider;
+				PROVISIONING_PROFILE_SPECIFIER = "";
 				SKIP_INSTALL = YES;
 				SWIFT_VERSION = 6.0;
 				WRAPPER_EXTENSION = appex;
@@ -347,13 +378,15 @@
 		};
 		000000000000000000000027 /* Release */ = {
 			isa = XCBuildConfiguration;
+			baseConfigurationReference = 000000000000000000000032 /* Config/EnterpriseCloudDriveFileProvider/Build.xcconfig */;
 			buildSettings = {
 				APPLICATION_EXTENSION_API_ONLY = YES;
 				CODE_SIGN_ENTITLEMENTS = Config/EnterpriseCloudDriveFileProvider/EnterpriseCloudDriveFileProvider.entitlements;
-				CODE_SIGNING_ALLOWED = NO;
-				CODE_SIGN_STYLE = Manual;
+				CODE_SIGN_IDENTITY = "Apple Development";
+				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = "";
+				DEVELOPMENT_TEAM = 8GSW97W8QB;
+				ENABLE_APP_SANDBOX = NO;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = Config/EnterpriseCloudDriveFileProvider/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -365,6 +398,7 @@
 				MARKETING_VERSION = 0.1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.peiel.enterprisecloud.drive.fileprovider;
 				PRODUCT_NAME = EnterpriseCloudDriveFileProvider;
+				PROVISIONING_PROFILE_SPECIFIER = "";
 				SKIP_INSTALL = YES;
 				SWIFT_VERSION = 6.0;
 				WRAPPER_EXTENSION = appex;
